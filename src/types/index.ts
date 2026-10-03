@@ -6,6 +6,7 @@ export interface User {
   bio?: string;
   email?: string;
   provider?: 'google' | 'discord' | 'guest';
+  isGuest?: boolean;
   interests?: string[];
   isVerified?: boolean;
   followersCount: number;

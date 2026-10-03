@@ -16,9 +16,16 @@ import {
   AlertCircle,
   Send,
   HelpCircle,
-  ChevronRight
+  ChevronRight,
+  UserCheck
 } from 'lucide-react';
 import { User } from '../../types';
+import {
+  sendBrowserNotification,
+  requestNotificationPermission,
+  playNotificationSound
+} from '../../utils/notificationService';
+
 import {
   DEFAULT_GOOGLE_CLIENT_ID,
   APP_CALLBACK_URL,
@@ -155,6 +162,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccessAuth, onClose }) 
                 });
                 if (res.ok) {
                   const data = await res.json();
+                  sendBrowserNotification('webop 🎉', {
+                    body: `Тавтай морил, ${data.name || 'хэрэглэгч'}! Google-ээр амжилттай нэвтэрлээ.`,
+                    tag: 'webop_welcome'
+                  });
                   playConnectedSound();
                   setLoadingProvider(null);
                   onSuccessAuth({
@@ -310,6 +321,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccessAuth, onClose }) 
     setResendCountdown(60);
     setIsSendingEmail(true);
 
+    // Request browser notification permission
+    requestNotificationPermission();
+
     const result = await sendOtpToGmail(emailInput.trim(), newCode);
     setIsSendingEmail(false);
     setIsRealEmailSent(result.isRealEmailSent);
@@ -317,7 +331,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccessAuth, onClose }) 
     if (result.isRealEmailSent) {
       setOtpSuccessMessage(`Код таны Gmail (${emailInput}) хаяг руу бодитоор илгээгдлээ! Inbox болон Spam хавтсаа шалгаж, ирсэн 6 оронтой кодыг оруулна уу.`);
     } else {
-      setOtpSuccessMessage(`Код таны Gmail (${emailInput}) хаяг руу илгээгдлээ. Ирсэн 6 оронтой кодыг оруулна уу.`);
+      setOtpSuccessMessage(`Код таны Gmail (${emailInput}) хаяг руу илгээгдлээ. Inbox хавтсаа шалгана уу.`);
     }
 
     playPopSound();
@@ -374,6 +388,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccessAuth, onClose }) 
     setIsVerifyingOtp(true);
     playConnectedSound();
 
+    sendBrowserNotification('webop 🎉', {
+      body: `Тавтай морил! Та имэйл кодоор амжилттай нэвтэрлээ.`,
+      tag: 'webop_welcome'
+    });
+
     setTimeout(() => {
       setIsVerifyingOtp(false);
       onSuccessAuth({
@@ -424,14 +443,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccessAuth, onClose }) 
           </button>
         )}
 
-        {/* Settings gear button */}
-        <button
-          onClick={() => setShowConfigModal(true)}
-          className="absolute top-5 right-5 p-2 rounded-xl text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-          title="Security & API Settings"
-        >
-          <Settings className="w-4 h-4" />
-        </button>
+
 
         {/* Brand Lockup */}
         <div className="flex flex-col items-center mb-5">
@@ -510,49 +522,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccessAuth, onClose }) 
               <span>Continue with Google</span>
             </button>
 
-            {/* Quick Google Client ID Key Input & Clipboard Paste */}
-            <div className="space-y-1 text-left px-0.5">
-              <div className="flex items-center justify-between text-[11px] font-bold text-neutral-600 dark:text-neutral-400">
-                <span className="flex items-center gap-1">
-                  <Key className="w-3 h-3 text-indigo-500" />
-                  <span>Google Client ID</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const text = await navigator.clipboard.readText();
-                      if (text) {
-                        setGoogleClientId(text.trim());
-                        saveStoredClientId('google', text.trim());
-                        setOauthErrorNotice(null);
-                        playPopSound();
-                      }
-                    } catch {
-                      setShowConfigModal(true);
-                      setConfigActiveTab('google');
-                    }
-                  }}
-                  className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5 font-bold"
-                >
-                  <Copy className="w-2.5 h-2.5" />
-                  <span>Clipboard-аас буулгах</span>
-                </button>
-              </div>
-
-              <input
-                type="text"
-                value={googleClientId}
-                onChange={(e) => {
-                  const val = e.target.value.trim();
-                  setGoogleClientId(val);
-                  saveStoredClientId('google', val);
-                }}
-                placeholder="Google Client ID буулгах (жишээ: 785341097976-rela...)"
-                className="w-full px-3 py-1.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-[11px] font-mono text-neutral-800 dark:text-neutral-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-            </div>
-
             {/* Discord OAuth Button */}
             <button
               onClick={handleStartDiscord}
@@ -607,6 +576,40 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccessAuth, onClose }) 
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
+
+            {/* Divider */}
+            <div className="relative my-2.5">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-neutral-200 dark:border-neutral-800" />
+              </div>
+              <div className="relative flex justify-center text-[10px] uppercase font-bold text-neutral-400">
+                <span className="bg-white dark:bg-neutral-900 px-2">эсвэл</span>
+              </div>
+            </div>
+
+            {/* Continue as Guest Button */}
+            <button
+              type="button"
+              onClick={() => {
+                playPopSound();
+                onSuccessAuth({
+                  name: 'Guest User',
+                  username: 'guest',
+                  email: 'guest@webop.local',
+                  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80',
+                  isGuest: true,
+                  provider: 'guest',
+                  bio: 'Trial Guest Account (Зөвхөн үзэх горим)'
+                });
+              }}
+              className="w-full py-2.5 px-4 rounded-2xl bg-neutral-100 hover:bg-neutral-200/80 dark:bg-neutral-800 dark:hover:bg-neutral-750 text-neutral-800 dark:text-neutral-200 font-bold text-xs transition-colors flex items-center justify-center gap-2 border border-neutral-200/60 dark:border-neutral-700/60 active:scale-[0.98]"
+            >
+              <UserCheck className="w-4 h-4 text-neutral-500" />
+              <span>Зочноор үзэх (Continue as Guest - Trial)</span>
+            </button>
+            <p className="text-[10px] text-neutral-400 text-center">
+              Зочин эрхээр зөвхөн пост, reel үзэж, коммент унших боломжтой
+            </p>
           </div>
         ) : (
           /* TAB 2: EMAIL CODE VERIFICATION (OTP) */

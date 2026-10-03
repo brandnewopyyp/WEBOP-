@@ -39,7 +39,8 @@ import { EditInterestsModal } from './components/auth/EditInterestsModal';
 import { NotificationsDrawer } from './components/notifications/NotificationsDrawer';
 import { AuthModal } from './components/auth/AuthModal';
 import { OnboardingModal } from './components/auth/OnboardingModal';
-import { Sparkles } from 'lucide-react';
+import { GuestRestrictionModal } from './components/auth/GuestRestrictionModal';
+import { Sparkles, Eye, ShieldAlert } from 'lucide-react';
 import { playPopSound, playMessageSentSound } from './utils/soundEffects';
 
 const defaultFallbackUser: User = {
@@ -162,8 +163,44 @@ export default function App() {
   const unreadMessagesCount = conversations.reduce((acc, c) => acc + c.unreadCount, 0);
   const unreadNotifsCount = notifications.filter((n) => !n.isRead).length;
 
+  // Guest state & restriction guard
+  const isGuest = currentUser.isGuest || currentUser.username === 'guest';
+  const [guestRestrictionAction, setGuestRestrictionAction] = useState<string | null>(null);
+
+  const requireRegisteredUser = (actionName: string): boolean => {
+    if (isGuest) {
+      setGuestRestrictionAction(actionName);
+      return false;
+    }
+    return true;
+  };
+
   // Auth Handlers
   const handleStartAuthFlow = (userData: Partial<User>) => {
+    if (userData.isGuest) {
+      const guestUser: User = {
+        id: 'user_guest',
+        name: 'Guest User',
+        username: 'guest',
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80',
+        bio: 'Trial Guest Account (Зөвхөн үзэх горим)',
+        isGuest: true,
+        provider: 'guest',
+        followersCount: 0,
+        followingCount: 0,
+        postsCount: 0,
+        isOnline: true,
+        interests: ['Social', 'Tech', 'Music']
+      };
+      setCurrentUser(guestUser);
+      setSelectedProfileUser(guestUser);
+      setIsAuthenticated(true);
+      setOnboardingInitialData(null);
+      localStorage.setItem('webop_auth_user', JSON.stringify(guestUser));
+      localStorage.setItem('webop_auth_state', 'logged_in');
+      playPopSound();
+      return;
+    }
     setOnboardingInitialData(userData);
   };
 
@@ -198,6 +235,7 @@ export default function App() {
 
   // Handlers for Posts
   const handleLikeToggle = (postId: string) => {
+    if (!requireRegisteredUser('пост дээр Like дарах')) return;
     setPosts((prev) =>
       prev.map((p) => {
         if (p.id === postId) {
@@ -214,6 +252,7 @@ export default function App() {
   };
 
   const handleSaveToggle = (postId: string) => {
+    if (!requireRegisteredUser('пост хадгалах')) return;
     setPosts((prev) =>
       prev.map((p) => {
         if (p.id === postId) {
@@ -225,6 +264,7 @@ export default function App() {
   };
 
   const handleAddComment = (postId: string, text: string) => {
+    if (!requireRegisteredUser('коммент бичих')) return;
     const newComment = {
       id: `c_${Date.now()}`,
       author: {
@@ -257,6 +297,7 @@ export default function App() {
     location?: string;
     feeling?: string;
   }) => {
+    if (!requireRegisteredUser('шинэ пост оруулах')) return;
     const newPost: Post = {
       id: `post_${Date.now()}`,
       author: currentUser,
@@ -281,6 +322,7 @@ export default function App() {
 
   // Handlers for Notes
   const handleSaveNote = (noteData: Partial<Note>) => {
+    if (!requireRegisteredUser('тэмдэглэл (Note) бичих')) return;
     const newNote: Note = {
       id: `note_${Date.now()}`,
       userId: currentUser.id,
@@ -307,6 +349,7 @@ export default function App() {
   };
 
   const handleReplyToNote = (recipient: User, replyText: string) => {
+    if (!requireRegisteredUser('тэмдэглэлд хариулах')) return;
     let conv = conversations.find((c) => c.participant.id === recipient.id);
     const newMsg = {
       id: `m_${Date.now()}`,
@@ -348,6 +391,7 @@ export default function App() {
 
   // Handlers for Messaging
   const handleSendMessage = (conversationId: string, msgData: any) => {
+    if (!requireRegisteredUser('чат бичих')) return;
     const newMsg = {
       id: `msg_${Date.now()}`,
       ...msgData
@@ -371,6 +415,7 @@ export default function App() {
 
   // Calling Functionality
   const handleStartCall = (participant: User, type: 'audio' | 'video') => {
+    if (!requireRegisteredUser('дуу / дүрс дуудлага хийх')) return;
     setActiveCallSession({
       id: `call_${Date.now()}`,
       participant,
@@ -406,6 +451,7 @@ export default function App() {
 
   // Navigation helpers
   const handleOpenMessagesWithUser = (targetUser: User) => {
+    if (!requireRegisteredUser('чатлах')) return;
     let conv = conversations.find((c) => c.participant.id === targetUser.id);
     if (!conv) {
       conv = {
@@ -441,6 +487,7 @@ export default function App() {
   };
 
   const handleShareToStory = (post: Post) => {
+    if (!requireRegisteredUser('Story нэмэх')) return;
     const newStory: Story = {
       id: `story_${Date.now()}`,
       author: currentUser,
@@ -454,6 +501,7 @@ export default function App() {
   };
 
   const handleSendStoryReply = (author: User, replyText: string) => {
+    if (!requireRegisteredUser('Story-д хариулах')) return;
     handleSendMessage(
       conversations.find((c) => c.participant.id === author.id)?.id || activeConvId,
       {
@@ -494,10 +542,36 @@ export default function App() {
         />
       )}
 
+      {/* Guest Trial Mode Notice Banner */}
+      {isGuest && (
+        <div className="fixed top-0 left-0 right-0 z-40 bg-amber-500/15 backdrop-blur-md border-b border-amber-500/30 px-4 py-2 text-xs flex items-center justify-between text-amber-950 dark:text-amber-200">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+            <span className="font-bold">Зочин (Trial Guest):</span>
+            <span className="opacity-90 hidden sm:inline">Та зөвхөн пост, reel үзэж, коммент унших эрхтэй (View-only).</span>
+          </div>
+          <button
+            onClick={() => {
+              setIsAuthenticated(false);
+              setIsAuthModalDismissed(false);
+            }}
+            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-[11px] shadow-xs transition-colors shrink-0"
+          >
+            Бүртгэлээр нэвтрэх
+          </button>
+        </div>
+      )}
+
       {/* Mobile Sticky Header */}
       <MobileHeader
-        onOpenNotifications={() => setIsNotificationsOpen(true)}
-        onOpenMessages={() => setCurrentTab('messages')}
+        onOpenNotifications={() => {
+          if (!requireRegisteredUser('мэдэгдэл хүлээн авах')) return;
+          setIsNotificationsOpen(true);
+        }}
+        onOpenMessages={() => {
+          if (!requireRegisteredUser('чатлах')) return;
+          setCurrentTab('messages');
+        }}
         unreadNotifsCount={unreadNotifsCount}
         unreadMessagesCount={unreadMessagesCount}
         darkMode={darkMode}
@@ -512,12 +586,17 @@ export default function App() {
         currentTab={currentTab}
         setCurrentTab={(tab) => {
           if (tab === 'notes') {
+            if (!requireRegisteredUser('тэмдэглэл бичих')) return;
             setIsCreateNoteOpen(true);
             return;
           }
           if (tab === 'notifications') {
+            if (!requireRegisteredUser('мэдэгдэл хүлээн авах')) return;
             setIsNotificationsOpen(true);
             return;
+          }
+          if (tab === 'messages') {
+            if (!requireRegisteredUser('чатлах')) return;
           }
           if (tab === 'profile') {
             setSelectedProfileUser(currentUser);
@@ -526,8 +605,14 @@ export default function App() {
         }}
         unreadMessagesCount={unreadMessagesCount}
         unreadNotifsCount={unreadNotifsCount}
-        openCreateModal={() => setIsCreatePostOpen(true)}
-        openCreateNoteModal={() => setIsCreateNoteOpen(true)}
+        openCreateModal={() => {
+          if (!requireRegisteredUser('шинэ пост оруулах')) return;
+          setIsCreatePostOpen(true);
+        }}
+        openCreateNoteModal={() => {
+          if (!requireRegisteredUser('тэмдэглэл бичих')) return;
+          setIsCreateNoteOpen(true);
+        }}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
         currentUser={currentUser}
@@ -615,12 +700,18 @@ export default function App() {
       <BottomNav
         currentTab={currentTab}
         setCurrentTab={(tab) => {
+          if (tab === 'messages') {
+            if (!requireRegisteredUser('чатлах')) return;
+          }
           if (tab === 'profile') {
             setSelectedProfileUser(currentUser);
           }
           setCurrentTab(tab);
         }}
-        openCreateModal={() => setIsCreatePostOpen(true)}
+        openCreateModal={() => {
+          if (!requireRegisteredUser('шинэ пост оруулах')) return;
+          setIsCreatePostOpen(true);
+        }}
         unreadMessagesCount={unreadMessagesCount}
       />
 
@@ -715,6 +806,18 @@ export default function App() {
           }}
         />
       )}
+
+      {/* Guest Action Restriction Modal */}
+      <GuestRestrictionModal
+        isOpen={!!guestRestrictionAction}
+        onClose={() => setGuestRestrictionAction(null)}
+        onOpenAuth={() => {
+          setGuestRestrictionAction(null);
+          setIsAuthenticated(false);
+          setIsAuthModalDismissed(false);
+        }}
+        actionName={guestRestrictionAction || ''}
+      />
     </div>
   );
 }
