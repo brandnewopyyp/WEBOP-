@@ -1,0 +1,11 @@
+{
+  "name": "webop",
+  "description": "webop - Modern social platform combining the best of Instagram, Facebook, and Messenger with interactive audio and video calling, status notes, stories, reels, and real-time chat.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
